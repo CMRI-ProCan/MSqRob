@@ -327,22 +327,7 @@ fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.interce
 #Create a list with fitted ridge regression models
 .createRidgeList=function(datalist, weights, response, fixed, shrinkage.fixed, formula_fix, random, formula_ran, add.intercept, intercept, intercept_name = "(Intercept)", k, robustM, scaleUnshrFix, modfiedGS,  tolPwrss, verbose, printProgress=NULL, shiny=FALSE, message_fitting=NULL, ...){
 
-  progress <- NULL
-  if(isTRUE(shiny)){
-    # Create a Progress object
-    progress <- shiny::Progress$new()
-
-    # Make sure it closes when we exit this reactive, even if there's an error
-    on.exit(progress$close())
-    progress$set(message = message_fitting, value = 0)
-  }
-
-  count <- 0
-
-  modellist <- mapply(function(x,y){
-
-    count <<- count+1
-    updateProgress(progress=progress, detail=paste0("Fitting model ",count," of ",length(datalist),"."), n=length(datalist), shiny=shiny, print=isTRUE(printProgress))
+  modellist_function <- function(x,y){
 
     n <- nrow(x)
     #If the weighs for this particular protein are of length 1, duplicate them to the correct length
@@ -381,7 +366,9 @@ fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.interce
     attr(ridgeModel,"MSqRob_fullcnms") <- attr(parsedFormula,"MSqRob_fullcnms")
 
     return(ridgeModel)
-  }, datalist, weights, SIMPLIFY = FALSE)
+  }
+  modellist <- foreach(x = datalist, y = weights) %dopar% modellist_function(x, y)
+  cat("Done .createRidgeList\n")
   return(modellist)
 }
 
