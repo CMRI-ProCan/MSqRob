@@ -40,7 +40,7 @@
 #' @include dummyVars_MSqRob.R
 #' @include updateProgress.R
 #' @export
-fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.intercept=TRUE, shrinkage.fixed=NULL, weights="Huber", k = 1.345, par_squeeze=NULL, squeezeVar=TRUE, min_df=1, robust_var=TRUE, robustM = TRUE, scaleUnshrFix = FALSE, modfiedGS = FALSE, tolPwrss = 1e-10, verbose=FALSE, printProgress=FALSE, shiny=FALSE, message_fitting = NULL, message_thetas = NULL, message_squeeze = NULL, message_update = NULL, ...)
+fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.intercept=TRUE, shrinkage.fixed=NULL, weights="Huber", k = 1.345, par_squeeze=NULL, squeezeVar=TRUE, min_df=1, robust_var=TRUE, robustM = TRUE, scaleUnshrFix = FALSE, modfiedGS = FALSE, tolPwrss = 1e-10, verbose=FALSE, printProgress=FALSE, shiny=FALSE, message_fitting = NULL, message_thetas = NULL, message_squeeze = NULL, message_update = NULL, parallel = FALSE, ...)
 {
   datalist <- getData(protdata, simplify=FALSE)
 
@@ -77,7 +77,7 @@ fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.interce
     datalist <- adjustNames(datalist, random)
 
     #Fit the list of ridge models
-    modellist <- .createRidgeList(datalist = datalist, weights = weights, response = response, fixed = fixed, shrinkage.fixed = shrinkage.fixed, formula_fix = formula_fix, random = random, formula_ran = formula_ran, add.intercept = add.intercept, intercept = intercept, intercept_name = "(Intercept)", k = k, robustM = robustM, scaleUnshrFix = scaleUnshrFix, modfiedGS = modfiedGS, tolPwrss = tolPwrss, verbose = verbose, printProgress=printProgress, shiny=shiny, message_fitting=message_fitting, ...)
+    modellist <- .createRidgeList(datalist = datalist, weights = weights, response = response, fixed = fixed, shrinkage.fixed = shrinkage.fixed, formula_fix = formula_fix, random = random, formula_ran = formula_ran, add.intercept = add.intercept, intercept = intercept, intercept_name = "(Intercept)", k = k, robustM = robustM, scaleUnshrFix = scaleUnshrFix, modfiedGS = modfiedGS, tolPwrss = tolPwrss, verbose = verbose, printProgress=printProgress, shiny=shiny, message_fitting=message_fitting, parallel = parallel, ...)
 
     #2. We need a simple linear regression model (lm)
   } else if(is.null(random) && (all(shrinkage.fixed==0) && is.numeric(shrinkage.fixed))){
@@ -325,10 +325,16 @@ fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.interce
 
 
 #Create a list with fitted ridge regression models
-.createRidgeList=function(datalist, weights, response, fixed, shrinkage.fixed, formula_fix, random, formula_ran, add.intercept, intercept, intercept_name = "(Intercept)", k, robustM, scaleUnshrFix, modfiedGS,  tolPwrss, verbose, printProgress=NULL, shiny=FALSE, message_fitting=NULL, ...){
+.createRidgeList=function(datalist, weights, response, fixed, shrinkage.fixed, formula_fix, random, formula_ran, add.intercept, intercept, intercept_name = "(Intercept)", k, robustM, scaleUnshrFix, modfiedGS,  tolPwrss, verbose, printProgress=NULL, shiny=FALSE, message_fitting=NULL, parallel = FALSE, ...){
 
+  count <- 0
   modellist_function <- function(x,y){
 
+    if(!parallel)
+    {
+      count <<- count+1
+      updateProgress(progress=progress, detail=paste0("Fitting model ",count," of ",length(datalist),"."), n=length(datalist), shiny=shiny, print=isTRUE(printProgress))
+    }
     n <- nrow(x)
     #If the weighs for this particular protein are of length 1, duplicate them to the correct length
     if(length(y)==1){y <- rep(y,n)}
@@ -367,8 +373,14 @@ fit.model=function(protdata, response=NULL, fixed=NULL, random=NULL, add.interce
 
     return(ridgeModel)
   }
-  modellist <- foreach(x = datalist, y = weights) %dopar% modellist_function(x, y)
-  cat("Done .createRidgeList\n")
+  if(parallel)
+  {
+    modellist <- foreach(x = datalist, y = weights) %dopar% modellist_function(x, y)
+  }
+  else
+  {
+    modellist <- mapply(modellist_function, datalist, weights, SIMPLIFY = FALSE)
+  }
   return(modellist)
 }
 
