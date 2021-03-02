@@ -41,7 +41,6 @@ Imports:
     vsn,
     miniUI,
     htmltools,
-    mzR,
     ProtGenerics,
     BiocParallel,
     snow,
